@@ -1,0 +1,17 @@
+[general]
+name=streamSelect
+description=Dockable widget for downward stream selection
+version=0.0.1
+qgisMinimumVersion=1.8
+qgisMaximumVersion=2.99
+author=Ruggero Valentinotti
+email=valruggero@gmail.com
+changelog=0.0.1
+    - First release
+tags=stream,network,selection
+icon=icon.png
+experimental=True
+homepage=http://z/
+tracker=https://z
+repository=https://z
+category=Vector
