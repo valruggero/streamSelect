@@ -50,7 +50,6 @@ class StreamSelect:
         #self.sourceIdEmitPoint.setButton(buttonSelectSourceId)
         self.targetIdEmitPoint = QgsMapToolEmitPoint(self.iface.mapCanvas())
         #self.targetIdEmitPoint.setButton(buttonSelectTargetId)
-
         
         #connect the action to each method
         QObject.connect(self.action, SIGNAL("triggered()"), self.show)
@@ -63,26 +62,25 @@ class StreamSelect:
         QObject.connect(self.dock.buttonClear, SIGNAL("clicked()"), self.clear)
 	QObject.connect(self.dock.buttonHelp, SIGNAL("clicked()"), self.call_help)
 	QObject.connect(self.dock.lineEditSourceId,SIGNAL("editingFinished ()"),self.setSourceIdByExp)
+	QObject.connect(self.dock.lineEditTargetId,SIGNAL("editingFinished ()"),self.setTargetIdByExp)
 	
 	self.sourceFeatID = None
-             
+	self.targetFeatID = None
+       
         #self.dock.lineEditSourceId.setValidator(QIntValidator())
         #self.dock.lineEditTargetId.setValidator(QIntValidator())
-        
-        
+               
     def show(self):
         self.iface.addDockWidget(Qt.LeftDockWidgetArea, self.dock)
-        
+       
     def unload(self):
         # Remove the plugin menu item and icon
         self.iface.removePluginMenu("&SBM-Tools", self.action)
         self.iface.removeDockWidget(self.dock)
 
     def updateComboLayers(self):
+	#populate the combo with vector layers
 	self.dock.comboLayers.clear()
-#	self.dock.comboLayers.addItem("")
-#        layer = self.iface.mapCanvas().layer(index)
-        #populate the combo with vector layers
         mapCanvas = self.iface.mapCanvas()
         for i in range(mapCanvas.layerCount()):
 	    layer = mapCanvas.layer(i)
@@ -92,13 +90,13 @@ class StreamSelect:
     def updateComboFields(self, index):		
 	self.dock.comboFields.clear()
 	self.dock.comboFields.addItem("")
-#        layer = self.iface.mapCanvas().layer(index)
 	activeLayerID = str(self.dock.comboLayers.itemData(index))
 	layer = QgsMapLayerRegistry.instance().mapLayer(activeLayerID)
 	if layer:
 		fields = layer.pendingFields()
 		for field in fields:
-			if field.typeName() == 'String':
+			#QMessageBox.warning(self.dock, self.dock.windowTitle(),str(field.typeName()))
+			if field.typeName() == 'String' or field.typeName() == 'varchar' or field.typeName() == 'char' or field.typeName() == 'text':
 				self.dock.comboFields.addItem(field.name())
         
     def selectSourceId(self, checked):
@@ -128,7 +126,6 @@ class StreamSelect:
                             pt.y() + width)
 	layer.select(rect,True)
 	selected_features = layer.selectedFeatures()
-
 	if layer.selectedFeatureCount()>1:
 		QMessageBox.warning(self.dock, self.dock.windowTitle(),
                 'WARNING: more than one feature selected!\n')
@@ -140,7 +137,7 @@ class StreamSelect:
 		self.sourceFeatID=feat.id()
 	self.dock.lineEditSourceId.setText(sourceID)
 
-    def setSourceIdByExp(self):
+    def setSourceIdByExp(self):                                                     
 	if self.dock.comboLayers.currentText()=='':
 		QMessageBox.warning(self.dock, self.dock.windowTitle(),
                 'WARNING: Select a layer and the id field!\n')
@@ -148,25 +145,27 @@ class StreamSelect:
 	if self.dock.comboFields.currentText()=='':
 		QMessageBox.warning(self.dock, self.dock.windowTitle(),
                 'WARNING: Select the id field!\n')
-        	return  
-        activeLayerID = str(self.dock.comboLayers.itemData(self.dock.comboLayers.currentIndex()))
-	layer = QgsMapLayerRegistry.instance().mapLayer(activeLayerID)
-	layer.removeSelection()
-	source=self.dock.lineEditSourceId.text()
-	sourceExp='"'+self.dock.comboFields.currentText()+'" = \''+source+'\''
-	req = QgsFeatureRequest().setFilterExpression(sourceExp)
-	fea = layer.getFeatures(req)
-	if fea:
-		for feai in fea:	
-			self.sourceFeatID=feai.id()
-			layer.select(self.sourceFeatID)
-			break	
-
-      
+        	return
+        if self.dock.lineEditSourceId.text() != '':
+        	activeLayerID = str(self.dock.comboLayers.itemData(self.dock.comboLayers.currentIndex()))
+        	layer = QgsMapLayerRegistry.instance().mapLayer(activeLayerID)
+        	layer.removeSelection()
+        	source=self.dock.lineEditSourceId.text()
+        	sourceExp='"'+self.dock.comboFields.currentText()+'" = \''+source+'\''
+        	req = QgsFeatureRequest().setFilterExpression(sourceExp)
+        	fea = layer.getFeatures(req)
+        	if fea:
+        		for feai in fea:	
+        			self.sourceFeatID=feai.id()
+        			layer.select(self.sourceFeatID)
+        			# select only the first feature (should be an id!)
+        			break	
+# some strange behavior on win (signal emitted more times). On linux it seems ok...
+#        	if layer.selectedFeatureCount()<1:
+#        		QMessageBox.warning(self.dock, self.dock.windowTitle(),
+#        			'WARNING: Source ID not found!\n')
+#                	return
     def selectTargetId(self, checked):
-
-	self.dock.lineEditTargetId.setText(str(id))
-
         if checked:
             self.toggleSelectButton(self.dock.buttonSelectTargetId)
             self.dock.lineEditTargetId.setText("")
@@ -192,7 +191,6 @@ class StreamSelect:
                             pt.x() + width,
                             pt.y() + width)
 	layer.select(rect,True)
-
 	selected_features = layer.selectedFeatures()
 	if layer.selectedFeatureCount()>1:
 		QMessageBox.warning(self.dock, self.dock.windowTitle(),
@@ -201,9 +199,39 @@ class StreamSelect:
 	if layer.selectedFeatureCount()==0:
         	return
 	for feat in selected_features:
-		sourceID=feat[str(self.dock.comboFields.currentText())]
-        self.dock.lineEditTargetId.setText(sourceID)
-    
+		targetID=feat[str(self.dock.comboFields.currentText())]
+		self.targetFeatID=feat.id()
+        self.dock.lineEditTargetId.setText(targetID)
+
+    def setTargetIdByExp(self):
+	if self.dock.comboLayers.currentText()=='':
+		QMessageBox.warning(self.dock, self.dock.windowTitle(),
+                'WARNING: Select a layer and the id field!\n')
+        	return   
+	if self.dock.comboFields.currentText()=='':
+		QMessageBox.warning(self.dock, self.dock.windowTitle(),
+                'WARNING: Select the id field!\n')
+        	return
+        if self.dock.lineEditTargetId.text() != '':
+        	activeLayerID = str(self.dock.comboLayers.itemData(self.dock.comboLayers.currentIndex()))
+        	layer = QgsMapLayerRegistry.instance().mapLayer(activeLayerID)
+        	layer.removeSelection()
+        	target=self.dock.lineEditTargetId.text()
+        	targetExp='"'+self.dock.comboFields.currentText()+'" = \''+target+'\''
+        	req = QgsFeatureRequest().setFilterExpression(targetExp)
+        	fea = layer.getFeatures(req)
+        	if fea:
+        		for feai in fea:	
+        			self.targetFeatID=feai.id()
+        			layer.select(self.targetFeatID)
+        			# select only the first feature (should be an id!)
+        			break	
+#some strange behavior on win (signal emitted more times). On linux it seems ok...
+#        	if layer.selectedFeatureCount()<1:
+#        		QMessageBox.warning(self.dock, self.dock.windowTitle(),
+#        			'WARNING: Target ID not found!\n')
+#                	return
+                	
     def getLength(self):
     	activeLayerID = str(self.dock.comboLayers.itemData(self.dock.comboLayers.currentIndex()))
 	layer = QgsMapLayerRegistry.instance().mapLayer(activeLayerID)
@@ -216,8 +244,7 @@ class StreamSelect:
     	return totalLen, count
     
     def run(self):
-    	self.dock.textEditLog.clear()
-        
+    	self.dock.textEditLog.clear()   
 	if self.dock.comboLayers.currentText()=='':
 		QMessageBox.warning(self.dock, self.dock.windowTitle(),
                 'WARNING: Select a layer and the id field!\n')
@@ -246,82 +273,57 @@ class StreamSelect:
 	selection_list.append(self.sourceFeatID)
 	final_list.append(self.sourceFeatID)
 	
-	# this part based on flowTrace (modified by "Ed B"
+	# this part partially based on flowTrace by "Ed B"
 	while selection_list:
 		request = QgsFeatureRequest().setFilterFid(selection_list[0])
 		feature = layer.getFeatures(request).next()
 		# get list of nodes
-		nodes = feature.geometry().asPolyline()
-		
-		#self.dock.textEditLog.append(str(self.dock.comboFields.currentText())+ ": " + feature[str(self.dock.comboFields.currentText())]+" - N. vertex: " + str(len(nodes)))
+		nodes = feature.geometry().asPolyline()		
 		# get end node upstream 
 		up_end_node = nodes[-1]        
-		#print(str(len(nodes)-1)+" "+str(up_end_node))
 		# select all features around upstream coordinate using a bounding box
 		rectangle = QgsRectangle(up_end_node.x() - tol, up_end_node.y() - tol, up_end_node.x() + tol, up_end_node.y() + tol)
 		request = QgsFeatureRequest().setFilterRect(rectangle)
 		features = layer.getFeatures(request)
-
 		# start nodes into tolerance		
 		n_start_node=0
-
 		features = layer.getFeatures(request)
 		#iterate thru requested features
-		for feature in features:
-			
+		for feature in features:			
 			#get list of nodes
 			nodes = feature.geometry().asPolyline()
-	
 			#get start node downstream
 			down_start_node = nodes[0]
-			#print(str(0)+" "+str(down_start_node))	
-			
 			#setup distance
 			distance = QgsDistanceArea()				
 			#get distance from up_end_node to down_start_node
-			dist = distance.measureLine(up_end_node, down_start_node)
-			
+			dist = distance.measureLine(up_end_node, down_start_node)			
 			if dist < tol:
 				n_start_node=n_start_node+1
 				#add feature to final list
 				final_list.append(feature.id())
-					
-				#add feature to selection list to keep selecting upstream line segments
-				#selection_list.append(feature.id())
-										
-				if feature.id() not in selection_list:
-					#add feature to selection list
+				#add feature to selection list to iterate over it (if it not is the target)
+				if feature.id() not in selection_list and feature.id() != self.targetFeatID:
 					selection_list.append(feature.id())
-			#if feature is the target, break
-			if feature[str(self.dock.comboFields.currentText())]==str(self.dock.lineEditTargetId.text()):
-				break	
-
-
 		if n_start_node > 1:
 			self.dock.textEditLog.append("Bifurcation at end of: "+	feature[str(self.dock.comboFields.currentText())])
 		if n_start_node > 1 and self.dock.checkBifurcat.isChecked():
 			#remove last n_start_node items from final_list				
 			final_list[len(final_list)-n_start_node:len(final_list)] = []					
 			self.dock.textEditLog.append("Stop at bifurcation!")			
-			break	
-		if feature[str(self.dock.comboFields.currentText())]==str(self.dock.lineEditTargetId.text()):
-			break		
-		#remove feature from selection list
-		selection_list.pop(0)
-			
-			
+			break			
+		#remove feature "0" from selection list
+		selection_list.pop(0)			
 	#select features using final_list			
-	layer.setSelectedFeatures(final_list)				
-	
-	tot = self.getLength()
-	
+	layer.setSelectedFeatures(final_list)					
+	tot = self.getLength()	
 	self.dock.textEditLog.append("")
 	self.dock.textEditLog.append("N. of selected feature(s): " + str(tot[1]))
 	self.dock.textEditLog.append("Length of selected feature(s): " + str(round(tot[0],3)))
-	
-
-#if feat[str(self.dock.comboFields.currentText())]==str(self.dock.lineEditTargetId.text()):
-#stop=1
+	#zoom to selected feature if requested by ui
+	if self.dock.checkZoomToSel.isChecked():
+		mapCanvas = self.iface.mapCanvas()
+		mapCanvas.zoomToSelected(layer)
 	QApplication.restoreOverrideCursor()
         
     def call_help(self):

@@ -1,7 +1,7 @@
 [general]
 name=streamSelect
-description=Dockable widget for downward stream selection. Selects stream parts given a source element and a target element.
-version=0.0.2
+description=Dockable widget for downward stream selection
+version=0.0.1
 qgisMinimumVersion=2.2
 qgisMaximumVersion=2.99
 author=Ruggero Valentinotti
